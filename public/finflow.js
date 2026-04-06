@@ -411,8 +411,8 @@ function renderCards() {
     const fechamento = invoice ? invoice.fechamento : `Dia ${card.fechamentoDia}`;
     const dueDate = invoice ? invoice.dueDate : buildDateFromCycle(card.vencimentoDia, state.currentMonth, state.currentYear);
     const closeDate = invoice ? invoice.closeDate : buildDateFromCycle(card.fechamentoDia, state.currentMonth, state.currentYear);
-    const dueInfo = getDateHighlightInfo(dueDate);
-    const closeInfo = getDateHighlightInfo(closeDate);
+    const dueInfo = getDateHighlightInfo(dueDate, 'due');
+    const closeInfo = getDateHighlightInfo(closeDate, 'close');
     return `<div class="card-chip">
       <div class="card-chip-top">
         <div>
@@ -469,16 +469,22 @@ function buildDateFromCycle(day, monthIndex, year) {
   return new Date(year, monthIndex, day);
 }
 
-function getDateHighlightInfo(targetDate) {
+function getDateHighlightInfo(targetDate, type) {
   if (!targetDate) return '';
   const today = new Date();
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const diffMs = targetDate.getTime() - startOfToday.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const labels = {
+    due: { today: 'Vence hoje', soon: 'Falta 1 dia', days: (d) => `Faltam ${d} dias`, past: 'Vencido' },
+    close: { today: 'Fecha hoje', soon: 'Falta 1 dia', days: (d) => `Faltam ${d} dias`, past: 'Fechado' },
+  };
+  const text = labels[type] || labels.due;
   if (diffDays < 0) return { className: 'due-past', label: 'Vencido' };
-  if (diffDays === 0) return { className: 'due-today', label: 'Vence hoje' };
-  if (diffDays === 1) return { className: 'due-soon', label: 'Falta 1 dia' };
-  if (diffDays <= 7) return { className: 'due-warning', label: `Faltam ${diffDays} dias` };
+  if (diffDays < 0) return { className: 'due-past', label: text.past };
+  if (diffDays === 0) return { className: 'due-today', label: text.today };
+  if (diffDays === 1) return { className: 'due-soon', label: text.soon };
+  if (diffDays <= 7) return { className: 'due-warning', label: text.days(diffDays) };
   return { className: '', label: '' };
 }
 
