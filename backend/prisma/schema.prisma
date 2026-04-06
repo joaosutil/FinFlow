@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../database.sqlite"
+}
+
+model Transaction {
+  id        Int               @id @default(autoincrement())
+  descricao String
+  valor     Float
+  tipo      String
+  categoria String
+  data      DateTime
+  status    String            @default("pago")
+  metodoPagamento String      @default("debito")
+  cardId    Int?
+  card      Card?             @relation(fields: [cardId], references: [id])
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model Goal {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  alvo      Float
+  atual     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Card {
+  id        Int      @id @default(autoincrement())
+  nome      String
+  bandeira  String
+  final     String
+  vencimentoDia Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+}

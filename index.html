@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinFlow — Controle Financeiro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Fin<span>Flow</span>
+  </div>
+  <div class="header-right">
+    <input class="filter-input" id="filterInput" placeholder="Filtrar transações..." />
+    <select class="month-selector" id="monthSel">
+      <option value="0">Janeiro</option>
+      <option value="1">Fevereiro</option>
+      <option value="2">Março</option>
+      <option value="3">Abril</option>
+      <option value="4">Maio</option>
+      <option value="5">Junho</option>
+      <option value="6">Julho</option>
+      <option value="7">Agosto</option>
+      <option value="8">Setembro</option>
+      <option value="9">Outubro</option>
+      <option value="10">Novembro</option>
+      <option value="11">Dezembro</option>
+    </select>
+    <div class="year-badge" id="anoLabel">2025</div>
+    <div class="status-pill status-loading" id="appStatus">Conectando...</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SUMMARY -->
+  <div class="summary-grid">
+    <div class="summary-card card-receita">
+      <div class="card-label">Receitas</div>
+      <div class="card-value" id="totalReceitas">R$ 0,00</div>
+      <div class="card-sub" id="qtdReceitas">0 lançamentos</div>
+      <div class="card-bar"><div class="card-bar-fill" id="barReceitas" style="width:0%"></div></div>
+    </div>
+    <div class="summary-card card-despesa">
+      <div class="card-label">Despesas</div>
+      <div class="card-value" id="totalDespesas">R$ 0,00</div>
+      <div class="card-sub" id="qtdDespesas">0 lançamentos</div>
+      <div class="card-bar"><div class="card-bar-fill" id="barDespesas" style="width:0%"></div></div>
+    </div>
+    <div class="summary-card card-saldo">
+      <div class="card-label">Saldo do Mês</div>
+      <div class="card-value" id="saldoMes">R$ 0,00</div>
+      <div class="card-sub" id="saldoSub">—</div>
+      <div class="card-bar"><div class="card-bar-fill" id="barSaldo" style="width:0%"></div></div>
+    </div>
+    <div class="summary-card card-economia">
+      <div class="card-label">Taxa de Economia</div>
+      <div class="card-value" id="taxaEconomia">0%</div>
+      <div class="card-sub" id="economiaSub">da renda total</div>
+      <div class="card-bar"><div class="card-bar-fill" id="barEconomia" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- FATURAS DE CARTÃO -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(116,185,255,0.12)">💳</div>
+        Faturas de Cartão
+      </div>
+      <button class="btn-add" onclick="openModalCard()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Cartão
+      </button>
+    </div>
+    <div class="cards-grid" id="cardsGrid">
+      <div class="empty-state"><span class="empty-icon">💳</span>Nenhum cartão cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- TABELAS RECEITAS + DESPESAS -->
+  <div class="two-col">
+
+    <!-- RECEITAS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon" style="background:rgba(0,229,160,0.12)">💰</div>
+          Receitas
+        </div>
+        <button class="btn-add" onclick="openModal('receita')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Adicionar
+        </button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th>Valor</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyReceitas">
+            <tr><td colspan="5"><div class="empty-state"><span class="empty-icon">📭</span>Nenhuma receita registrada.</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DESPESAS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon" style="background:rgba(255,107,107,0.12)">💳</div>
+          Despesas
+        </div>
+        <button class="btn-add" onclick="openModal('despesa')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Adicionar
+        </button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th>Valor</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyDespesas">
+            <tr><td colspan="5"><div class="empty-state"><span class="empty-icon">📭</span>Nenhuma despesa registrada.</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- GASTO POR CATEGORIA -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(116,185,255,0.12)">📊</div>
+        Gastos por Categoria
+      </div>
+    </div>
+    <div class="cat-breakdown">
+      <div class="cat-grid" id="catGrid">
+        <div class="empty-state" style="padding:30px"><span class="empty-icon">📊</span>Adicione despesas para ver o breakdown.</div>
+      </div>
+      <div class="cat-chart-wrap">
+        <canvas id="chartCategorias"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- METAS + GRÁFICO -->
+  <div class="two-col">
+
+    <!-- EVOLUÇÃO MENSAL -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon" style="background:rgba(0,229,160,0.12)">📈</div>
+          Evolução Mensal
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="setChart('mes')">Mês</button>
+          <button class="tab" onclick="setChart('ano')">Ano</button>
+        </div>
+      </div>
+      <div class="chart-container">
+        <div class="chart-wrap">
+          <canvas id="chartReceitasDespesas"></canvas>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;">
+          <span style="color:var(--accent);font-family:var(--font-mono)">■ Receitas</span>
+          <span style="color:var(--accent2);font-family:var(--font-mono)">■ Despesas</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- METAS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <div class="panel-icon" style="background:rgba(255,209,102,0.12)">🎯</div>
+          Metas Financeiras
+        </div>
+        <button class="btn-add" onclick="openModalMeta()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova Meta
+        </button>
+      </div>
+      <div class="metas-grid" id="metasGrid">
+        <div class="empty-state"><span class="empty-icon">🎯</span>Nenhuma meta definida.</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- MODAL LANÇAMENTO -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modalTitleText">Novo Lançamento</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <input type="hidden" id="modalTipo">
+    <input type="hidden" id="editId" value="">
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <input type="text" class="form-input" id="inputDesc" placeholder="Ex: Salário, Aluguel..." />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor (R$)</label>
+        <input type="number" class="form-input" id="inputValor" placeholder="0,00" min="0" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data</label>
+        <input type="date" class="form-input" id="inputData"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-select" id="inputCat"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Método de Pagamento</label>
+      <select class="form-select" id="inputMetodo">
+        <option value="debito">Débito</option>
+        <option value="credito">Crédito</option>
+        <option value="pix">Pix</option>
+        <option value="dinheiro">Dinheiro</option>
+        <option value="boleto">Boleto</option>
+        <option value="transferencia">Transferência</option>
+      </select>
+    </div>
+    <div class="form-group" id="groupCartao" style="display:none">
+      <label class="form-label">Cartão de Crédito</label>
+      <select class="form-select" id="inputCartao"></select>
+    </div>
+    <div class="form-group" id="groupStatus" style="display:none">
+      <label class="form-label">Status</label>
+      <select class="form-select" id="inputStatus">
+        <option value="pago">Pago</option>
+        <option value="pendente">Pendente</option>
+        <option value="atrasado">Atrasado</option>
+      </select>
+    </div>
+    <button class="btn-submit" onclick="salvarLancamento()">Salvar Lançamento</button>
+  </div>
+</div>
+
+<!-- MODAL META -->
+<div class="modal-overlay" id="modalMetaOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span>🎯 Nova Meta Financeira</span>
+      <button class="modal-close" onclick="closeModalMeta()">✕</button>
+    </div>
+    <input type="hidden" id="metaEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Nome da Meta</label>
+      <input type="text" class="form-input" id="metaNome" placeholder="Ex: Viagem para Europa"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor Alvo (R$)</label>
+        <input type="number" class="form-input" id="metaAlvo" placeholder="10000"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor Atual (R$)</label>
+        <input type="number" class="form-input" id="metaAtual" placeholder="3000"/>
+      </div>
+    </div>
+    <button class="btn-submit" onclick="salvarMeta()">Salvar Meta</button>
+  </div>
+</div>
+
+<!-- MODAL CARTÃO -->
+<div class="modal-overlay" id="modalCardOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span>💳 Novo Cartão</span>
+      <button class="modal-close" onclick="closeModalCard()">✕</button>
+    </div>
+    <input type="hidden" id="cardEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Nome do Cartão</label>
+      <input type="text" class="form-input" id="cardNome" placeholder="Ex: Cartão Titanium"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Bandeira</label>
+        <input type="text" class="form-input" id="cardBandeira" placeholder="Ex: Visa"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Final</label>
+        <input type="text" class="form-input" id="cardFinal" placeholder="Ex: 4242"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Dia de Vencimento</label>
+      <input type="number" class="form-input" id="cardVencimento" placeholder="Ex: 10" min="1" max="28"/>
+    </div>
+    <button class="btn-submit" onclick="salvarCartao()">Salvar Cartão</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
