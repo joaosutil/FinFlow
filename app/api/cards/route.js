@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../_utils';
 
 function parseCard(body) {
   const nome = String(body.nome || '').trim();
@@ -21,11 +21,11 @@ function parseCard(body) {
 }
 
 export async function GET(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
-  const { data, error } = await supabase.from('cards').select('*').order('created_at', { ascending: false });
-  if (error) return jsonError('Erro ao buscar cartões.', 500);
+  const { data, error: fetchError } = await supabase.from('cards').select('*').order('created_at', { ascending: false });
+  if (fetchError) return jsonError('Erro ao buscar cartões.', 500);
   return jsonOk(data.map((c) => ({
     id: c.id,
     nome: c.nome,
@@ -37,15 +37,19 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const body = await req.json();
   const parsed = parseCard(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase.from('cards').insert(parsed.data).select('*').single();
-  if (error) return jsonError('Erro ao criar cartão.', 500);
+  const { data, error: insertError } = await supabase
+    .from('cards')
+    .insert({ ...parsed.data, user_id: user.id })
+    .select('*')
+    .single();
+  if (insertError) return jsonError('Erro ao criar cartão.', 500);
   return jsonOk({
     id: data.id,
     nome: data.nome,

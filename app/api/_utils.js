@@ -12,6 +12,14 @@ export function getSupabaseClient(req) {
   return createSupabaseServerClient(token);
 }
 
+export async function getUserOrThrow(req) {
+  const supabase = getSupabaseClient(req);
+  if (!supabase) return { error: 'Não autenticado.', code: 401 };
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) return { error: 'Sessão inválida.', code: 401 };
+  return { supabase, user: data.user };
+}
+
 export function jsonOk(data) {
   return Response.json({ status: 'ok', data });
 }

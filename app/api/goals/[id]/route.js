@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../../_utils';
 
 function parseGoal(body) {
   const nome = String(body.nome || '').trim();
@@ -13,25 +13,35 @@ function parseGoal(body) {
 }
 
 export async function PUT(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
   const body = await req.json();
   const parsed = parseGoal(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase.from('goals').update(parsed.data).eq('id', id).select('*').single();
-  if (error) return jsonError('Erro ao atualizar meta.', 500);
+  const { data, error: updateError } = await supabase
+    .from('goals')
+    .update(parsed.data)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select('*')
+    .single();
+  if (updateError) return jsonError('Erro ao atualizar meta.', 500);
   return jsonOk(data);
 }
 
 export async function DELETE(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
-  const { error } = await supabase.from('goals').delete().eq('id', id);
-  if (error) return jsonError('Erro ao excluir meta.', 500);
+  const { error: deleteError } = await supabase
+    .from('goals')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (deleteError) return jsonError('Erro ao excluir meta.', 500);
   return jsonOk({ id });
 }

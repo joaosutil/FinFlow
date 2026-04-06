@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../../_utils';
 
 const allowedTipos = ['receita', 'despesa'];
 const allowedStatus = ['pago', 'pendente', 'atrasado'];
@@ -55,46 +55,52 @@ function mapTransaction(row) {
 }
 
 export async function GET(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
-  const { data, error } = await supabase
+  const { data, error: fetchError } = await supabase
     .from('transactions')
     .select('*, card:cards(*)')
     .eq('id', id)
+    .eq('user_id', user.id)
     .single();
 
-  if (error || !data) return jsonError('Transação não encontrada.', 404);
+  if (fetchError || !data) return jsonError('Transação não encontrada.', 404);
   return jsonOk(mapTransaction(data));
 }
 
 export async function PUT(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
   const body = await req.json();
   const parsed = parseTransaction(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase
+  const { data, error: updateError } = await supabase
     .from('transactions')
     .update(parsed.data)
     .eq('id', id)
+    .eq('user_id', user.id)
     .select('*, card:cards(*)')
     .single();
 
-  if (error) return jsonError('Erro ao atualizar transação.', 500);
+  if (updateError) return jsonError('Erro ao atualizar transação.', 500);
   return jsonOk(mapTransaction(data));
 }
 
 export async function DELETE(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
-  const { error } = await supabase.from('transactions').delete().eq('id', id);
-  if (error) return jsonError('Erro ao excluir transação.', 500);
+  const { error: deleteError } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (deleteError) return jsonError('Erro ao excluir transação.', 500);
   return jsonOk({ id });
 }

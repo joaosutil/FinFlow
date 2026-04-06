@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../_utils';
 
 const allowedTipos = ['receita', 'despesa'];
 const allowedStatus = ['pago', 'pendente', 'atrasado'];
@@ -55,32 +55,32 @@ function mapTransaction(row) {
 }
 
 export async function GET(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
-  const { data, error } = await supabase
+  const { data, error: fetchError } = await supabase
     .from('transactions')
     .select('*, card:cards(*)')
     .order('data', { ascending: false });
 
-  if (error) return jsonError('Erro ao buscar transações.', 500);
+  if (fetchError) return jsonError('Erro ao buscar transações.', 500);
   return jsonOk(data.map(mapTransaction));
 }
 
 export async function POST(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const body = await req.json();
   const parsed = parseTransaction(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase
+  const { data, error: insertError } = await supabase
     .from('transactions')
-    .insert(parsed.data)
+    .insert({ ...parsed.data, user_id: user.id })
     .select('*, card:cards(*)')
     .single();
 
-  if (error) return jsonError('Erro ao criar transação.', 500);
+  if (insertError) return jsonError('Erro ao criar transação.', 500);
   return jsonOk(mapTransaction(data));
 }

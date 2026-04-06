@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../../_utils';
 
 function parseCard(body) {
   const nome = String(body.nome || '').trim();
@@ -21,16 +21,22 @@ function parseCard(body) {
 }
 
 export async function PUT(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
   const body = await req.json();
   const parsed = parseCard(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase.from('cards').update(parsed.data).eq('id', id).select('*').single();
-  if (error) return jsonError('Erro ao atualizar cartão.', 500);
+  const { data, error: updateError } = await supabase
+    .from('cards')
+    .update(parsed.data)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select('*')
+    .single();
+  if (updateError) return jsonError('Erro ao atualizar cartão.', 500);
   return jsonOk({
     id: data.id,
     nome: data.nome,
@@ -42,11 +48,15 @@ export async function PUT(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const id = Number(params.id);
-  const { error } = await supabase.from('cards').delete().eq('id', id);
-  if (error) return jsonError('Não foi possível excluir o cartão. Verifique se há despesas vinculadas.', 400);
+  const { error: deleteError } = await supabase
+    .from('cards')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (deleteError) return jsonError('Não foi possível excluir o cartão. Verifique se há despesas vinculadas.', 400);
   return jsonOk({ id });
 }

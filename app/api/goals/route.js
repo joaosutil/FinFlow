@@ -1,4 +1,4 @@
-import { getSupabaseClient, jsonError, jsonOk } from '../_utils';
+import { getUserOrThrow, jsonError, jsonOk } from '../_utils';
 
 function parseGoal(body) {
   const nome = String(body.nome || '').trim();
@@ -13,23 +13,27 @@ function parseGoal(body) {
 }
 
 export async function GET(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
-  const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
-  if (error) return jsonError('Erro ao buscar metas.', 500);
+  const { data, error: fetchError } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
+  if (fetchError) return jsonError('Erro ao buscar metas.', 500);
   return jsonOk(data);
 }
 
 export async function POST(req) {
-  const supabase = getSupabaseClient(req);
-  if (!supabase) return jsonError('Não autenticado.', 401);
+  const { supabase, user, error, code } = await getUserOrThrow(req);
+  if (error) return jsonError(error, code);
 
   const body = await req.json();
   const parsed = parseGoal(body);
   if (parsed.error) return jsonError(parsed.error);
 
-  const { data, error } = await supabase.from('goals').insert(parsed.data).select('*').single();
-  if (error) return jsonError('Erro ao criar meta.', 500);
+  const { data, error: insertError } = await supabase
+    .from('goals')
+    .insert({ ...parsed.data, user_id: user.id })
+    .select('*')
+    .single();
+  if (insertError) return jsonError('Erro ao criar meta.', 500);
   return jsonOk(data);
 }
