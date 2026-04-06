@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -33,6 +34,27 @@ export default function LoginPage() {
     }
   };
 
+  const resetPassword = async () => {
+    if (!email) {
+      setMessage('Digite seu e-mail para enviar o reset.');
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+      setMessage('Enviamos um link de redefinição para seu e-mail.');
+    } catch (error) {
+      setMessage(error.message || 'Erro ao enviar reset.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="auth-page">
       <div className="auth-card">
@@ -43,14 +65,19 @@ export default function LoginPage() {
           <input className="auth-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <label className="auth-label">Senha</label>
           <input className="auth-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <button className="auth-button" type="submit" disabled={loading}>
-            {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : 'Criar Conta'}
-          </button>
-        </form>
-        {message && <div className="auth-message">{message}</div>}
-        <button className="auth-link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          {mode === 'login' ? 'Não tenho conta' : 'Já tenho conta'}
+        <button className="auth-button" type="submit" disabled={loading}>
+          {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : 'Criar Conta'}
         </button>
+      </form>
+      {message && <div className="auth-message">{message}</div>}
+      {mode === 'login' && (
+        <button className="auth-link" onClick={resetPassword} disabled={loading || resetSent}>
+          {resetSent ? 'Reset enviado' : 'Esqueci minha senha'}
+        </button>
+      )}
+      <button className="auth-link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+        {mode === 'login' ? 'Não tenho conta' : 'Já tenho conta'}
+      </button>
       </div>
     </div>
   );

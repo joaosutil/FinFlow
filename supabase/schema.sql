@@ -5,6 +5,7 @@ create table if not exists public.cards (
   bandeira text not null,
   final text not null,
   vencimento_dia int not null check (vencimento_dia between 1 and 28),
+  fechamento_dia int not null check (fechamento_dia between 1 and 28),
   created_at timestamptz not null default now()
 );
 

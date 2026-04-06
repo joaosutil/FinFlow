@@ -5,6 +5,7 @@ function parseCard(body) {
   const bandeira = String(body.bandeira || '').trim();
   const final = String(body.final || '').trim();
   const vencimentoDia = Number(body.vencimentoDia);
+  const fechamentoDia = Number(body.fechamentoDia);
 
   if (!nome) return { error: 'Nome do cartão é obrigatório.' };
   if (!bandeira) return { error: 'Bandeira é obrigatória.' };
@@ -12,8 +13,11 @@ function parseCard(body) {
   if (Number.isNaN(vencimentoDia) || vencimentoDia < 1 || vencimentoDia > 28) {
     return { error: 'Dia de vencimento deve ser entre 1 e 28.' };
   }
+  if (Number.isNaN(fechamentoDia) || fechamentoDia < 1 || fechamentoDia > 28) {
+    return { error: 'Dia de fechamento deve ser entre 1 e 28.' };
+  }
 
-  return { data: { nome, bandeira, final, vencimento_dia: vencimentoDia } };
+  return { data: { nome, bandeira, final, vencimento_dia: vencimentoDia, fechamento_dia: fechamentoDia } };
 }
 
 export async function GET(req) {
@@ -28,6 +32,7 @@ export async function GET(req) {
     bandeira: c.bandeira,
     final: c.final,
     vencimentoDia: c.vencimento_dia,
+    fechamentoDia: c.fechamento_dia,
   })));
 }
 
@@ -47,5 +52,6 @@ export async function POST(req) {
     bandeira: data.bandeira,
     final: data.final,
     vencimentoDia: data.vencimento_dia,
+    fechamentoDia: data.fechamento_dia,
   });
 }

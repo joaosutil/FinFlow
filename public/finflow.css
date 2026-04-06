@@ -439,6 +439,33 @@ td {
   color: var(--muted);
 }
 
+.chip-label {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.card-chip-due.due-soon {
+  color: var(--accent2);
+  font-weight: 700;
+}
+
+.card-chip-due.due-warning {
+  color: var(--accent3);
+  font-weight: 700;
+}
+
+.card-chip-due.due-past {
+  color: var(--accent2);
+  text-decoration: line-through;
+}
+
+.card-chip-due.due-today {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

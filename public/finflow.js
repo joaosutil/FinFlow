@@ -73,6 +73,8 @@ window.FIN_INIT = () => {
   document.getElementById('modalMetaOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalMeta(); });
   document.getElementById('modalCardOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalCard(); });
   document.getElementById('inputMetodo').addEventListener('change', toggleCartaoField);
+  document.getElementById('cardVencimento').addEventListener('input', handleCardDates);
+  document.getElementById('cardFechamento').addEventListener('input', handleCardDates);
 
   loadData();
 };
@@ -406,6 +408,11 @@ function renderCards() {
     const invoice = invoices.find((i) => i.cardId === card.id);
     const total = invoice ? invoice.total : 0;
     const vencimento = invoice ? invoice.vencimento : `Dia ${card.vencimentoDia}`;
+    const fechamento = invoice ? invoice.fechamento : `Dia ${card.fechamentoDia}`;
+    const dueDate = invoice ? invoice.dueDate : buildDateFromCycle(card.vencimentoDia, state.currentMonth, state.currentYear);
+    const closeDate = invoice ? invoice.closeDate : buildDateFromCycle(card.fechamentoDia, state.currentMonth, state.currentYear);
+    const dueInfo = getDateHighlightInfo(dueDate);
+    const closeInfo = getDateHighlightInfo(closeDate);
     return `<div class="card-chip">
       <div class="card-chip-top">
         <div>
@@ -418,7 +425,8 @@ function renderCards() {
         </div>
       </div>
       <div class="card-chip-amount">${fmt(total)}</div>
-      <div class="card-chip-due">Vencimento: ${vencimento}</div>
+      <div class="card-chip-due ${closeInfo.className}">Fechamento: ${fechamento} <span class="chip-label">${closeInfo.label}</span></div>
+      <div class="card-chip-due ${dueInfo.className}">Vencimento: ${vencimento} <span class="chip-label">${dueInfo.label}</span></div>
     </div>`;
   }).join('');
 }
@@ -428,28 +436,97 @@ function buildInvoicesForMonth() {
   state.transactions
     .filter((t) => t.tipo === 'despesa' && t.metodoPagamento === 'credito' && t.cardId)
     .forEach((t) => {
-      const date = new Date(t.data);
-      if (date.getMonth() !== state.currentMonth || date.getFullYear() !== state.currentYear) return;
-      if (!invoicesMap[t.cardId]) {
-        invoicesMap[t.cardId] = { cardId: t.cardId, total: 0 };
-      }
-      invoicesMap[t.cardId].total += t.valor;
-    });
-
-  return Object.values(invoicesMap).map((invoice) => {
-    const card = state.cards.find((c) => c.id === invoice.cardId);
-    if (!card) return invoice;
-    return {
-      ...invoice,
-      vencimento: buildDueDateLabel(card.vencimentoDia),
-    };
+      const card = state.cards.find((c) => c.id === t.cardId);
+      if (!card) return;
+      const invoice = resolveInvoiceCycle(new Date(t.data), card);
+      const key = `${t.cardId}-${invoice.cycleYear}-${invoice.cycleMonth}`;
+    if (!invoicesMap[key]) {
+      invoicesMap[key] = {
+        cardId: t.cardId,
+        total: 0,
+        cycleMonth: invoice.cycleMonth,
+        cycleYear: invoice.cycleYear,
+        vencimento: buildDueDateLabel(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
+        fechamento: buildDueDateLabel(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
+        dueDate: buildDateFromCycle(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
+        closeDate: buildDateFromCycle(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
+      };
+    }
+    invoicesMap[key].total += t.valor;
   });
+
+  return Object.values(invoicesMap).filter((invoice) => (
+    invoice.cycleMonth === state.currentMonth && invoice.cycleYear === state.currentYear
+  ));
 }
 
-function buildDueDateLabel(day) {
-  const month = state.currentMonth + 1;
-  const year = state.currentYear;
+function buildDueDateLabel(day, monthIndex, year) {
+  const month = monthIndex + 1;
   return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+}
+
+function buildDateFromCycle(day, monthIndex, year) {
+  return new Date(year, monthIndex, day);
+}
+
+function getDateHighlightInfo(targetDate) {
+  if (!targetDate) return '';
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffMs = targetDate.getTime() - startOfToday.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { className: 'due-past', label: 'Vencido' };
+  if (diffDays === 0) return { className: 'due-today', label: 'Vence hoje' };
+  if (diffDays === 1) return { className: 'due-soon', label: 'Falta 1 dia' };
+  if (diffDays <= 7) return { className: 'due-warning', label: `Faltam ${diffDays} dias` };
+  return { className: '', label: '' };
+}
+
+function handleCardDates() {
+  const vencimentoInput = document.getElementById('cardVencimento');
+  const fechamentoInput = document.getElementById('cardFechamento');
+  if (!vencimentoInput || !fechamentoInput) return;
+  const vencimento = parseInt(vencimentoInput.value, 10);
+  const fechamento = parseInt(fechamentoInput.value, 10);
+  if (Number.isNaN(vencimento)) return;
+
+  const suggested = Math.max(1, vencimento - 5);
+  if (Number.isNaN(fechamento)) {
+    fechamentoInput.value = suggested;
+    return;
+  }
+  if (fechamento >= vencimento) {
+    fechamentoInput.value = suggested;
+  }
+}
+
+function resolveInvoiceCycle(transactionDate, card) {
+  const closeDay = card.fechamentoDia || 1;
+  const year = transactionDate.getFullYear();
+  const month = transactionDate.getMonth();
+  const day = transactionDate.getDate();
+
+  let cycleMonth = month;
+  let cycleYear = year;
+  if (day > closeDay) {
+    cycleMonth += 1;
+    if (cycleMonth > 11) {
+      cycleMonth = 0;
+      cycleYear += 1;
+    }
+  }
+
+  let dueMonth = cycleMonth;
+  let dueYear = cycleYear;
+  if (card.vencimentoDia <= closeDay) {
+    dueMonth += 1;
+    if (dueMonth > 11) {
+      dueMonth = 0;
+      dueYear += 1;
+    }
+  }
+
+  return { cycleMonth, cycleYear, dueMonth, dueYear };
 }
 
 function openModal(tipo, item = null) {
@@ -628,6 +705,7 @@ function openModalCard(card = null) {
   document.getElementById('cardBandeira').value = card ? card.bandeira : '';
   document.getElementById('cardFinal').value = card ? card.final : '';
   document.getElementById('cardVencimento').value = card ? card.vencimentoDia : '';
+  document.getElementById('cardFechamento').value = card ? card.fechamentoDia : '';
   document.getElementById('modalCardOverlay').classList.add('open');
 }
 
@@ -640,14 +718,15 @@ async function salvarCartao() {
   const bandeira = document.getElementById('cardBandeira').value.trim();
   const final = document.getElementById('cardFinal').value.trim();
   const vencimentoDia = parseInt(document.getElementById('cardVencimento').value, 10);
+  const fechamentoDia = parseInt(document.getElementById('cardFechamento').value, 10);
   const editId = document.getElementById('cardEditId').value;
 
-  if (!nome || !bandeira || !final || Number.isNaN(vencimentoDia)) {
+  if (!nome || !bandeira || !final || Number.isNaN(vencimentoDia) || Number.isNaN(fechamentoDia)) {
     alert('Preencha todos os campos do cartão.');
     return;
   }
 
-  const payload = { nome, bandeira, final, vencimentoDia };
+  const payload = { nome, bandeira, final, vencimentoDia, fechamentoDia };
   setLoading(true);
   try {
     if (editId) {
