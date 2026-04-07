@@ -1,7 +1,6 @@
 <header>
   <div class="logo">
-    <div class="logo-dot"></div>
-    Fin<span>Flow</span>
+    <img class="logo-img" src="/logo.png" alt="FinFlow" />
   </div>
     <div class="header-right">
       <input class="filter-input" id="filterInput" placeholder="Filtrar transações..." />
@@ -219,6 +218,53 @@
     </div>
     <div class="budget-grid" id="budgetGrid">
       <div class="empty-state"><span class="empty-icon">📉</span>Nenhum orçamento cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS IA -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(0,229,160,0.12)">🤖</div>
+        Insights IA
+      </div>
+      <button class="btn-add" onclick="gerarInsightsIA()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Gerar Insights
+      </button>
+    </div>
+    <div class="insight-settings">
+      <label class="form-label">Frequência do e‑mail</label>
+      <select class="form-select" id="insightFrequency">
+        <option value="daily">Diário</option>
+        <option value="weekly" selected>Semanal</option>
+        <option value="monthly">Mensal</option>
+      </select>
+      <button class="btn-secondary" onclick="salvarFrequenciaInsights()">Salvar</button>
+    </div>
+    <div class="insight-list" id="insightList">
+      <div class="empty-state"><span class="empty-icon">🤖</span>Gere insights com IA para dicas financeiras.</div>
+    </div>
+    <div class="insight-history" id="insightHistory"></div>
+  </div>
+
+  <!-- CHAT FINANCEIRO -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(116,185,255,0.12)">💬</div>
+        Chat Financeiro
+      </div>
+    </div>
+    <div class="chat-box" id="chatBox"></div>
+    <div class="quick-replies">
+      <button class="quick-reply" onclick="setQuickReply('Onde posso cortar gastos este mês?')">Onde posso cortar?</button>
+      <button class="quick-reply" onclick="setQuickReply('Como melhorar meu saldo no próximo mês?')">Melhorar saldo</button>
+      <button class="quick-reply" onclick="setQuickReply('Quais categorias estão mais altas?')">Categorias altas</button>
+    </div>
+    <div class="chat-input">
+      <input class="form-input" id="chatInput" placeholder="Pergunte sobre gastos, metas, cortes..." />
+      <button class="btn-add" onclick="enviarChat()">Enviar</button>
     </div>
   </div>
 

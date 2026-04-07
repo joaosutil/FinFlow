@@ -1,5 +1,10 @@
 import { getUserOrThrow, jsonError, jsonOk } from '../../_utils';
 function buildDateLabel(dateStr) {
+  if (!dateStr) return '';
+  if (dateStr.includes('-')) {
+    const [y, m, d] = dateStr.split('-').map((n) => parseInt(n, 10));
+    if (y && m && d) return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+  }
   const d = new Date(dateStr);
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');

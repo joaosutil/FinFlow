@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/notifications/insights?secret=chave_secreta_super_segura",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

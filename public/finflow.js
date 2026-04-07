@@ -52,6 +52,8 @@ const state = {
   invoices: [],
   categories: [],
   budgets: [],
+  chatMessages: [],
+  insightHistory: [],
   currentMonth: new Date().getMonth(),
   currentYear: new Date().getFullYear(),
   chartMode: 'mes',
@@ -138,7 +140,7 @@ async function loadData() {
       body: JSON.stringify({ month: state.currentMonth, year: state.currentYear }),
     });
 
-    const [transactions, goals, cards, investments, recurring, invoices, categories, budgets] = await Promise.all([
+    const [transactions, goals, cards, investments, recurring, invoices, categories, budgets, settings, history] = await Promise.all([
       fetchJson('/api/transactions'),
       fetchJson('/api/goals'),
       fetchJson('/api/cards'),
@@ -147,6 +149,8 @@ async function loadData() {
       fetchJson(`/api/invoices?year=${state.currentYear}&month=${state.currentMonth}`),
       fetchJson('/api/categories'),
       fetchJson('/api/budgets'),
+      fetchJson('/api/notifications/settings'),
+      fetchJson('/api/insights/history'),
     ]);
     state.transactions = transactions;
     state.goals = goals;
@@ -156,8 +160,12 @@ async function loadData() {
     state.invoices = invoices;
     state.categories = categories;
     state.budgets = budgets;
+    state.insightHistory = history || [];
     setStatus('Online', 'ok');
     render();
+    if (settings?.frequency) {
+      document.getElementById('insightFrequency').value = settings.frequency;
+    }
   } catch (error) {
     setStatus('Erro ao conectar', 'error');
     console.error(error);
@@ -228,6 +236,10 @@ function renderBudgets() {
     return;
   }
 
+  const today = new Date();
+  const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
+  const dayOfMonth = today.getDate();
+
   const spending = {};
   state.transactions.forEach((t) => {
     const d = new Date(t.data);
@@ -240,7 +252,13 @@ function renderBudgets() {
     const spent = spending[b.categoryKey] || 0;
     const ratio = Math.min(spent / b.monthlyLimit, 1);
     const alertAt = b.alertThreshold || 0.8;
-    const alertLabel = spent >= b.monthlyLimit ? 'Estouro de orçamento' : spent >= b.monthlyLimit * alertAt ? 'Alerta de orçamento' : '';
+    const projected = dayOfMonth > 0 ? (spent / dayOfMonth) * daysInMonth : spent;
+    const projectedAlert = projected > b.monthlyLimit ? 'Se continuar assim, vai estourar' : '';
+    const alertLabel = spent >= b.monthlyLimit
+      ? 'Estouro de orçamento'
+      : spent >= b.monthlyLimit * alertAt
+        ? 'Alerta de orçamento'
+        : projectedAlert;
     return `<div class="budget-card">
       <div class="budget-title">${getCategoryMeta('despesa', b.categoryKey).label}</div>
       <div class="budget-meta">Limite: ${fmt(b.monthlyLimit)} • Gasto: ${fmt(spent)}</div>
@@ -292,6 +310,9 @@ function render() {
   renderRecorrencias();
   renderCategorias();
   renderBudgets();
+  renderInsights([]);
+  renderChat();
+  renderInsightHistory();
 }
 
 function renderTabela(tbodyId, items, showStatus) {
@@ -1156,6 +1177,106 @@ async function enviarAlertasEmail() {
   }
 }
 
+function renderInsights(insights) {
+  const list = document.getElementById('insightList');
+  if (!list) return;
+  if (!insights || insights.length === 0) {
+    list.innerHTML = `<div class="empty-state"><span class="empty-icon">🤖</span>Gere insights com IA para dicas financeiras.</div>`;
+    return;
+  }
+  list.innerHTML = insights.map((text) => `<div class="insight-card">${escHtml(text)}</div>`).join('');
+}
+
+function renderInsightHistory() {
+  const box = document.getElementById('insightHistory');
+  if (!box) return;
+  if (!state.insightHistory.length) {
+    box.textContent = 'Sem histórico de insights.';
+    return;
+  }
+  box.innerHTML = state.insightHistory.map((h) => {
+    const label = `${String(h.month + 1).padStart(2, '0')}/${h.year}`;
+    const items = (h.insights || []).slice(0, 3).map((i) => `<li>${escHtml(i)}</li>`).join('');
+    return `<div style="margin-top:10px"><strong>${label}</strong><ul>${items}</ul></div>`;
+  }).join('');
+}
+
+async function gerarInsightsIA() {
+  setLoading(true);
+  try {
+    const data = await fetchJson('/api/insights', {
+      method: 'POST',
+      body: JSON.stringify({ month: state.currentMonth, year: state.currentYear }),
+    });
+    renderInsights(data.insights || []);
+  } catch (error) {
+    setStatus('Erro ao gerar insights', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function salvarFrequenciaInsights() {
+  const freq = document.getElementById('insightFrequency').value;
+  setLoading(true);
+  try {
+    await fetchJson('/api/notifications/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ frequency: freq }),
+    });
+    setStatus('Frequência salva', 'ok');
+  } catch (error) {
+    setStatus('Erro ao salvar frequência', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setQuickReply(text) {
+  const input = document.getElementById('chatInput');
+  input.value = text;
+  input.focus();
+}
+
+function renderChat() {
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  if (state.chatMessages.length === 0) {
+    box.innerHTML = `<div class="empty-state"><span class="empty-icon">💬</span>Faça uma pergunta financeira.</div>`;
+    return;
+  }
+  box.innerHTML = state.chatMessages.map((m) => (
+    `<div class="chat-msg ${m.role === 'user' ? 'chat-user' : 'chat-ai'}">${escHtml(m.text)}</div>`
+  )).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function enviarChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  state.chatMessages.push({ role: 'user', text });
+  input.value = '';
+  renderChat();
+
+  setLoading(true);
+  try {
+    const data = await fetchJson('/api/insights/chat', {
+      method: 'POST',
+      body: JSON.stringify({ question: text, month: state.currentMonth, year: state.currentYear }),
+    });
+    state.chatMessages.push({ role: 'ai', text: data.answer });
+    renderChat();
+  } catch (error) {
+    setStatus('Erro no chat', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
 function openModalCard(card = null) {
   document.getElementById('cardEditId').value = card ? card.id : '';
   document.getElementById('cardNome').value = card ? card.nome : '';
@@ -1433,11 +1554,23 @@ function fmt(value) {
 }
 
 function fmtDate(d) {
-  if (!d) return '';
-  const date = new Date(d);
+  const date = parseLocalDate(d);
+  if (!date) return '';
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   return `${day}/${month}/${date.getFullYear()}`;
+}
+
+function parseLocalDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && value.includes('-')) {
+    const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function setText(id, value) {
