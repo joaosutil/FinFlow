@@ -1,17 +1,12 @@
 import { getUserOrThrow, jsonError, jsonOk } from '../../_utils';
 
-function parseGoal(body) {
+function parseCategory(body) {
   const nome = String(body.nome || '').trim();
-  const alvo = Number(body.alvo);
-  const atual = Number(body.atual || 0);
-  const contribPercent = Number(body.contribPercent || 0);
-
+  const tipo = body.tipo;
+  const cor = body.cor || null;
   if (!nome) return { error: 'Nome é obrigatório.' };
-  if (Number.isNaN(alvo) || alvo <= 0) return { error: 'Valor alvo inválido.' };
-  if (Number.isNaN(atual) || atual < 0) return { error: 'Valor atual inválido.' };
-  if (Number.isNaN(contribPercent) || contribPercent < 0) return { error: 'Percentual inválido.' };
-
-  return { data: { nome, alvo, atual, contrib_percent: contribPercent } };
+  if (!['receita', 'despesa'].includes(tipo)) return { error: 'Tipo inválido.' };
+  return { data: { nome, tipo, cor } };
 }
 
 export async function PUT(req, { params }) {
@@ -20,24 +15,18 @@ export async function PUT(req, { params }) {
 
   const id = Number(params.id);
   const body = await req.json();
-  const parsed = parseGoal(body);
+  const parsed = parseCategory(body);
   if (parsed.error) return jsonError(parsed.error);
 
   const { data, error: updateError } = await supabase
-    .from('goals')
+    .from('categories')
     .update(parsed.data)
     .eq('id', id)
     .eq('user_id', user.id)
     .select('*')
     .single();
-  if (updateError) return jsonError('Erro ao atualizar meta.', 500);
-  return jsonOk({
-    id: data.id,
-    nome: data.nome,
-    alvo: Number(data.alvo),
-    atual: Number(data.atual),
-    contribPercent: Number(data.contrib_percent || 0),
-  });
+  if (updateError) return jsonError('Erro ao atualizar categoria.', 500);
+  return jsonOk({ id: data.id, nome: data.nome, tipo: data.tipo, cor: data.cor });
 }
 
 export async function DELETE(req, { params }) {
@@ -46,10 +35,10 @@ export async function DELETE(req, { params }) {
 
   const id = Number(params.id);
   const { error: deleteError } = await supabase
-    .from('goals')
+    .from('categories')
     .delete()
     .eq('id', id)
     .eq('user_id', user.id);
-  if (deleteError) return jsonError('Erro ao excluir meta.', 500);
+  if (deleteError) return jsonError('Erro ao excluir categoria.', 500);
   return jsonOk({ id });
 }

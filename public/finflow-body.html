@@ -3,8 +3,8 @@
     <div class="logo-dot"></div>
     Fin<span>Flow</span>
   </div>
-  <div class="header-right">
-    <input class="filter-input" id="filterInput" placeholder="Filtrar transações..." />
+    <div class="header-right">
+      <input class="filter-input" id="filterInput" placeholder="Filtrar transações..." />
     <select class="month-selector" id="monthSel">
       <option value="0">Janeiro</option>
       <option value="1">Fevereiro</option>
@@ -19,10 +19,11 @@
       <option value="10">Novembro</option>
       <option value="11">Dezembro</option>
     </select>
-    <div class="year-badge" id="anoLabel">2025</div>
-    <div class="status-pill status-loading" id="appStatus">Conectando...</div>
-  </div>
-</header>
+      <div class="year-badge" id="anoLabel">2025</div>
+      <div class="status-pill status-loading" id="appStatus">Conectando...</div>
+      <button class="btn-secondary" onclick="enviarAlertasEmail()">Enviar alertas</button>
+    </div>
+  </header>
 
 <div class="container">
 
@@ -54,6 +55,88 @@
     </div>
   </div>
 
+  <!-- COMPARATIVO MENSAL -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(0,229,160,0.12)">📌</div>
+        Comparativo Mensal
+      </div>
+      <div class="panel-subtitle" id="compPeriodo">Mês atual vs anterior</div>
+    </div>
+    <div class="compare-grid">
+      <div class="compare-card">
+        <div class="compare-title">Receitas</div>
+        <div class="compare-row">
+          <span>Atual</span>
+          <strong id="compRecAtual">R$ 0,00</strong>
+        </div>
+        <div class="compare-row">
+          <span>Anterior</span>
+          <strong id="compRecPrev">R$ 0,00</strong>
+        </div>
+        <div class="compare-delta" id="compRecDelta">—</div>
+      </div>
+      <div class="compare-card">
+        <div class="compare-title">Despesas</div>
+        <div class="compare-row">
+          <span>Atual</span>
+          <strong id="compDespAtual">R$ 0,00</strong>
+        </div>
+        <div class="compare-row">
+          <span>Anterior</span>
+          <strong id="compDespPrev">R$ 0,00</strong>
+        </div>
+        <div class="compare-delta" id="compDespDelta">—</div>
+      </div>
+      <div class="compare-card">
+        <div class="compare-title">Saldo</div>
+        <div class="compare-row">
+          <span>Atual</span>
+          <strong id="compSaldoAtual">R$ 0,00</strong>
+        </div>
+        <div class="compare-row">
+          <span>Anterior</span>
+          <strong id="compSaldoPrev">R$ 0,00</strong>
+        </div>
+        <div class="compare-delta" id="compSaldoDelta">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD ANUAL -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(116,185,255,0.12)">🗓️</div>
+        Dashboard Anual
+      </div>
+      <div class="panel-subtitle" id="annualPeriodo">Ano atual</div>
+    </div>
+    <div class="annual-grid">
+      <div class="annual-card">
+        <div class="annual-title">Receitas do Ano</div>
+        <div class="annual-value" id="annualReceitas">R$ 0,00</div>
+        <div class="annual-sub" id="annualReceitasDelta">—</div>
+      </div>
+      <div class="annual-card">
+        <div class="annual-title">Despesas do Ano</div>
+        <div class="annual-value" id="annualDespesas">R$ 0,00</div>
+        <div class="annual-sub" id="annualDespesasDelta">—</div>
+      </div>
+      <div class="annual-card">
+        <div class="annual-title">Saldo do Ano</div>
+        <div class="annual-value" id="annualSaldo">R$ 0,00</div>
+        <div class="annual-sub" id="annualSaldoDelta">—</div>
+      </div>
+    </div>
+    <div class="chart-container">
+      <div class="chart-wrap">
+        <canvas id="chartAnual"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- FATURAS DE CARTÃO -->
   <div class="panel full-panel">
     <div class="panel-header">
@@ -68,6 +151,74 @@
     </div>
     <div class="cards-grid" id="cardsGrid">
       <div class="empty-state"><span class="empty-icon">💳</span>Nenhum cartão cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- INVESTIMENTOS -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(255,209,102,0.12)">💹</div>
+        Investimentos
+      </div>
+      <button class="btn-add" onclick="openModalInvestimento()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Investimento
+      </button>
+    </div>
+    <div class="invest-grid" id="investGrid">
+      <div class="empty-state"><span class="empty-icon">💹</span>Nenhum investimento cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- RECORRÊNCIAS -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(0,229,160,0.12)">🔁</div>
+        Recorrências
+      </div>
+      <button class="btn-add" onclick="openModalRecorrencia()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova Recorrência
+      </button>
+    </div>
+    <div class="recorrencia-grid" id="recorrenciaGrid">
+      <div class="empty-state"><span class="empty-icon">🔁</span>Nenhuma recorrência cadastrada.</div>
+    </div>
+  </div>
+
+  <!-- CATEGORIAS -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(116,185,255,0.12)">🏷️</div>
+        Categorias
+      </div>
+      <button class="btn-add" onclick="openModalCategoria()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova Categoria
+      </button>
+    </div>
+    <div class="cat-list" id="categoriaGrid">
+      <div class="empty-state"><span class="empty-icon">🏷️</span>Nenhuma categoria personalizada.</div>
+    </div>
+  </div>
+
+  <!-- ORÇAMENTOS -->
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="panel-icon" style="background:rgba(255,107,107,0.12)">📉</div>
+        Orçamentos por Categoria
+      </div>
+      <button class="btn-add" onclick="openModalBudget()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Orçamento
+      </button>
+    </div>
+    <div class="budget-grid" id="budgetGrid">
+      <div class="empty-state"><span class="empty-icon">📉</span>Nenhum orçamento cadastrado.</div>
     </div>
   </div>
 
@@ -277,6 +428,10 @@
         <input type="number" class="form-input" id="metaAtual" placeholder="3000"/>
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">% da Receita para Contribuir</label>
+      <input type="number" class="form-input" id="metaPercent" placeholder="Ex: 10" min="0" step="0.1"/>
+    </div>
     <button class="btn-submit" onclick="salvarMeta()">Salvar Meta</button>
   </div>
 </div>
@@ -312,5 +467,172 @@
       <input type="number" class="form-input" id="cardFechamento" placeholder="Ex: 3" min="1" max="28"/>
     </div>
     <button class="btn-submit" onclick="salvarCartao()">Salvar Cartão</button>
+  </div>
+</div>
+
+<!-- MODAL INVESTIMENTO -->
+<div class="modal-overlay" id="modalInvestOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="investTitle">💹 Novo Investimento</span>
+      <button class="modal-close" onclick="closeModalInvestimento()">✕</button>
+    </div>
+    <input type="hidden" id="investEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input type="text" class="form-input" id="investNome" placeholder="Ex: Tesouro Selic"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Aporte Inicial</label>
+        <input type="number" class="form-input" id="investAporte" placeholder="1000"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor Atual</label>
+        <input type="number" class="form-input" id="investAtual" placeholder="1200"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Data de Início</label>
+      <input type="date" class="form-input" id="investData"/>
+    </div>
+    <button class="btn-submit" onclick="salvarInvestimento()">Salvar Investimento</button>
+  </div>
+</div>
+
+<!-- MODAL ATUALIZAÇÃO INVESTIMENTO -->
+<div class="modal-overlay" id="modalInvestUpdateOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span>📈 Atualizar Investimento</span>
+      <button class="modal-close" onclick="closeModalInvestimentoUpdate()">✕</button>
+    </div>
+    <input type="hidden" id="investUpdateId" value="">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor Atual</label>
+        <input type="number" class="form-input" id="investUpdateValor" placeholder="1300"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data</label>
+        <input type="date" class="form-input" id="investUpdateData"/>
+      </div>
+    </div>
+    <button class="btn-submit" onclick="salvarInvestimentoUpdate()">Salvar Atualização</button>
+  </div>
+</div>
+
+<!-- MODAL RECORRÊNCIA -->
+<div class="modal-overlay" id="modalRecorrenciaOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="recTitle">🔁 Nova Recorrência</span>
+      <button class="modal-close" onclick="closeModalRecorrencia()">✕</button>
+    </div>
+    <input type="hidden" id="recEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <input type="text" class="form-input" id="recDesc" placeholder="Ex: Aluguel, Salário"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor</label>
+        <input type="number" class="form-input" id="recValor" placeholder="0,00"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dia do Mês</label>
+        <input type="number" class="form-input" id="recDia" min="1" max="28" placeholder="5"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Data Início</label>
+        <input type="date" class="form-input" id="recInicio"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data Fim (opcional)</label>
+        <input type="date" class="form-input" id="recFim"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <select class="form-select" id="recTipo">
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-select" id="recCat"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Método de Pagamento</label>
+      <select class="form-select" id="recMetodo">
+        <option value="debito">Débito</option>
+        <option value="credito">Crédito</option>
+        <option value="pix">Pix</option>
+        <option value="dinheiro">Dinheiro</option>
+        <option value="boleto">Boleto</option>
+        <option value="transferencia">Transferência</option>
+      </select>
+    </div>
+    <div class="form-group" id="groupRecCartao" style="display:none">
+      <label class="form-label">Cartão de Crédito</label>
+      <select class="form-select" id="recCartao"></select>
+    </div>
+    <button class="btn-submit" onclick="salvarRecorrencia()">Salvar Recorrência</button>
+  </div>
+</div>
+
+<!-- MODAL CATEGORIA -->
+<div class="modal-overlay" id="modalCategoriaOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="catTitle">🏷️ Nova Categoria</span>
+      <button class="modal-close" onclick="closeModalCategoria()">✕</button>
+    </div>
+    <input type="hidden" id="catEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input type="text" class="form-input" id="catNome" placeholder="Ex: Mercado"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <select class="form-select" id="catTipo">
+        <option value="despesa">Despesa</option>
+        <option value="receita">Receita</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cor (hex)</label>
+      <input type="text" class="form-input" id="catCor" placeholder="#00e5a0"/>
+    </div>
+    <button class="btn-submit" onclick="salvarCategoria()">Salvar Categoria</button>
+  </div>
+</div>
+
+<!-- MODAL ORÇAMENTO -->
+<div class="modal-overlay" id="modalBudgetOverlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="budgetTitle">📉 Novo Orçamento</span>
+      <button class="modal-close" onclick="closeModalBudget()">✕</button>
+    </div>
+    <input type="hidden" id="budgetEditId" value="">
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-select" id="budgetCategory"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Limite Mensal</label>
+        <input type="number" class="form-input" id="budgetLimit" placeholder="1000"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Alerta (%)</label>
+        <input type="number" class="form-input" id="budgetThreshold" placeholder="80" min="10" max="100"/>
+      </div>
+    </div>
+    <button class="btn-submit" onclick="salvarBudget()">Salvar Orçamento</button>
   </div>
 </div>

@@ -47,6 +47,11 @@ const state = {
   transactions: [],
   goals: [],
   cards: [],
+  investments: [],
+  recurring: [],
+  invoices: [],
+  categories: [],
+  budgets: [],
   currentMonth: new Date().getMonth(),
   currentYear: new Date().getFullYear(),
   chartMode: 'mes',
@@ -54,6 +59,7 @@ const state = {
   charts: {
     receitasDespesas: null,
     categorias: null,
+    anual: null,
   },
 };
 
@@ -75,6 +81,14 @@ window.FIN_INIT = () => {
   document.getElementById('inputMetodo').addEventListener('change', toggleCartaoField);
   document.getElementById('cardVencimento').addEventListener('input', handleCardDates);
   document.getElementById('cardFechamento').addEventListener('input', handleCardDates);
+  document.getElementById('modalInvestOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalInvestimento(); });
+  document.getElementById('modalInvestUpdateOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalInvestimentoUpdate(); });
+  document.getElementById('modalRecorrenciaOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalRecorrencia(); });
+  document.getElementById('recMetodo').addEventListener('change', toggleRecCartaoField);
+  document.getElementById('recTipo').addEventListener('change', handleRecTipo);
+  document.getElementById('modalCategoriaOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalCategoria(); });
+  document.getElementById('catTipo').addEventListener('change', handleCatTipo);
+  document.getElementById('modalBudgetOverlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModalBudget(); });
 
   loadData();
 };
@@ -118,14 +132,30 @@ async function loadData() {
   setStatus('Carregando...', 'loading');
   setLoading(true);
   try {
-    const [transactions, goals, cards] = await Promise.all([
+    await fetchJson('/api/recurring/ensure', { method: 'POST' });
+    await fetchJson('/api/goals/auto', {
+      method: 'POST',
+      body: JSON.stringify({ month: state.currentMonth, year: state.currentYear }),
+    });
+
+    const [transactions, goals, cards, investments, recurring, invoices, categories, budgets] = await Promise.all([
       fetchJson('/api/transactions'),
       fetchJson('/api/goals'),
       fetchJson('/api/cards'),
+      fetchJson('/api/investments'),
+      fetchJson('/api/recurring'),
+      fetchJson(`/api/invoices?year=${state.currentYear}&month=${state.currentMonth}`),
+      fetchJson('/api/categories'),
+      fetchJson('/api/budgets'),
     ]);
     state.transactions = transactions;
     state.goals = goals;
     state.cards = cards;
+    state.investments = investments;
+    state.recurring = recurring;
+    state.invoices = invoices;
+    state.categories = categories;
+    state.budgets = budgets;
     setStatus('Online', 'ok');
     render();
   } catch (error) {
@@ -136,8 +166,17 @@ async function loadData() {
   }
 }
 
-function changeMonth() {
+async function refreshInvoices() {
+  try {
+    state.invoices = await fetchJson(`/api/invoices?year=${state.currentYear}&month=${state.currentMonth}`);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function changeMonth() {
   state.currentMonth = parseInt(document.getElementById('monthSel').value, 10);
+  await refreshInvoices();
   render();
 }
 
@@ -155,6 +194,64 @@ function filteredTransactions() {
     const text = `${t.descricao} ${t.categoria}`.toLowerCase();
     return text.includes(state.filterText);
   });
+}
+
+function getCategoriesByTipo(tipo) {
+  const base = tipo === 'receita' ? CATS_RECEITA : CATS_DESPESA;
+  const custom = state.categories.filter((c) => c.tipo === tipo).map((c) => ({
+    key: `custom_${c.id}`,
+    label: c.nome,
+    emoji: '🏷️',
+    color: c.cor || null,
+    custom: true,
+  }));
+  return [...custom, ...base];
+}
+
+function getCategoryMeta(tipo, key) {
+  if (key && String(key).startsWith('custom_')) {
+    const id = Number(String(key).replace('custom_', ''));
+    const cat = state.categories.find((c) => c.id === id);
+    if (cat) return { label: cat.nome, emoji: '🏷️', color: cat.cor || null };
+  }
+  const base = tipo === 'receita' ? CATS_RECEITA : CATS_DESPESA;
+  const found = base.find((c) => c.key === key);
+  if (found) return { label: found.label, emoji: found.emoji, color: CAT_COLORS[key] || null };
+  return { label: key, emoji: '📦', color: null };
+}
+
+function renderBudgets() {
+  const grid = document.getElementById('budgetGrid');
+  if (!grid) return;
+  if (state.budgets.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">📉</span>Nenhum orçamento cadastrado.</div>`;
+    return;
+  }
+
+  const spending = {};
+  state.transactions.forEach((t) => {
+    const d = new Date(t.data);
+    if (d.getFullYear() !== state.currentYear || d.getMonth() !== state.currentMonth) return;
+    if (t.tipo !== 'despesa') return;
+    spending[t.categoria] = (spending[t.categoria] || 0) + t.valor;
+  });
+
+  grid.innerHTML = state.budgets.map((b) => {
+    const spent = spending[b.categoryKey] || 0;
+    const ratio = Math.min(spent / b.monthlyLimit, 1);
+    const alertAt = b.alertThreshold || 0.8;
+    const alertLabel = spent >= b.monthlyLimit ? 'Estouro de orçamento' : spent >= b.monthlyLimit * alertAt ? 'Alerta de orçamento' : '';
+    return `<div class="budget-card">
+      <div class="budget-title">${getCategoryMeta('despesa', b.categoryKey).label}</div>
+      <div class="budget-meta">Limite: ${fmt(b.monthlyLimit)} • Gasto: ${fmt(spent)}</div>
+      <div class="budget-bar"><div class="budget-bar-fill" style="width:${ratio * 100}%;"></div></div>
+      <div class="budget-alert">${alertLabel}</div>
+      <div style="margin-top:8px">
+        <button class="btn-edit" onclick="editarBudget(${b.id})" title="Editar">✎</button>
+        <button class="btn-del" onclick="deletarBudget(${b.id})" title="Excluir">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function render() {
@@ -189,6 +286,12 @@ function render() {
   renderChartCategorias(despesas);
   renderMetas();
   renderCards();
+  renderInvestimentos();
+  renderComparativo();
+  renderAnual();
+  renderRecorrencias();
+  renderCategorias();
+  renderBudgets();
 }
 
 function renderTabela(tbodyId, items, showStatus) {
@@ -199,8 +302,7 @@ function renderTabela(tbodyId, items, showStatus) {
   }
 
   tb.innerHTML = items.map((t) => {
-    const catList = t.tipo === 'receita' ? CATS_RECEITA : CATS_DESPESA;
-    const catObj = catList.find((c) => c.key === t.categoria) || { label: t.categoria, emoji: '📦' };
+    const catObj = getCategoryMeta(t.tipo, t.categoria);
     const statusHtml = showStatus
       ? `<span class="td-status status-${t.status || 'pago'}">${(t.status || 'pago').toUpperCase()}</span>`
       : `<span class="td-date">${fmtDate(t.data)}</span>`;
@@ -230,9 +332,9 @@ function renderCats(despesas, total) {
   });
   const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
   grid.innerHTML = sorted.map(([key, val]) => {
-    const catObj = CATS_DESPESA.find((c) => c.key === key) || { label: key, emoji: '📦' };
+    const catObj = getCategoryMeta('despesa', key);
     const pct = total > 0 ? Math.round(val / total * 100) : 0;
-    const color = CAT_COLORS[key] || '#b2bec3';
+    const color = catObj.color || CAT_COLORS[key] || '#b2bec3';
     return `<div class="cat-item">
       <div class="cat-item-top">
         <span class="cat-emoji">${catObj.emoji}</span>
@@ -382,6 +484,7 @@ function renderMetas() {
         <div>
           <div class="meta-name">${escHtml(m.nome)}</div>
           <div class="meta-target">Meta: ${fmt(m.alvo)}</div>
+          <div class="meta-target">Contribuição: ${m.contribPercent || 0}%</div>
         </div>
         <div>
           <button class="btn-edit" onclick="editarMeta(${m.id})" title="Editar">✎</button>
@@ -395,6 +498,173 @@ function renderMetas() {
   }).join('');
 }
 
+function renderInvestimentos() {
+  const grid = document.getElementById('investGrid');
+  if (!grid) return;
+  if (state.investments.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">💹</span>Nenhum investimento cadastrado.</div>`;
+    return;
+  }
+
+  grid.innerHTML = state.investments.map((inv) => {
+    const retorno = inv.aporteInicial > 0 ? ((inv.valorAtual - inv.aporteInicial) / inv.aporteInicial) * 100 : 0;
+    const retornoLabel = `${retorno >= 0 ? '+' : ''}${retorno.toFixed(1)}%`;
+    const history = (inv.history || []).slice(-3).map((h) => `${fmtDate(h.data)} • ${fmt(h.valor)}`).join('<br/>');
+    return `<div class="invest-card">
+      <div class="invest-top">
+        <div>
+          <div class="invest-name">${escHtml(inv.nome)}</div>
+          <div class="invest-meta">Início: ${fmtDate(inv.dataInicio)}</div>
+        </div>
+        <div>
+          <button class="btn-edit" onclick="editarInvestimento(${inv.id})" title="Editar">✎</button>
+          <button class="btn-del" onclick="deletarInvestimento(${inv.id})" title="Excluir">✕</button>
+        </div>
+      </div>
+      <div class="invest-amount">${fmt(inv.valorAtual)}</div>
+      <div class="invest-return">Rentabilidade: ${retornoLabel}</div>
+      <div class="invest-history">${history || 'Sem histórico recente.'}</div>
+      <button class="btn-add" style="margin-top:10px" onclick="openModalInvestimentoUpdate(${inv.id})">Atualizar Valor</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRecorrencias() {
+  const grid = document.getElementById('recorrenciaGrid');
+  if (!grid) return;
+  if (state.recurring.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">🔁</span>Nenhuma recorrência cadastrada.</div>`;
+    return;
+  }
+  grid.innerHTML = state.recurring.map((r) => {
+    return `<div class="rec-card">
+      <div class="rec-title">${escHtml(r.descricao)}</div>
+      <div class="rec-meta">${r.tipo} • Dia ${r.dayOfMonth} • ${r.categoria}</div>
+      <div class="rec-value">${fmt(r.valor)}</div>
+      <div class="rec-meta">Início: ${fmtDate(r.startDate)}${r.endDate ? ` • Fim: ${fmtDate(r.endDate)}` : ''}</div>
+      <div style="margin-top:8px">
+        <button class="btn-edit" onclick="editarRecorrencia(${r.id})" title="Editar">✎</button>
+        <button class="btn-del" onclick="deletarRecorrencia(${r.id})" title="Excluir">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderComparativo() {
+  const current = getMonthTotals(state.currentYear, state.currentMonth);
+  const { year: prevYear, month: prevMonth } = getPreviousMonth(state.currentYear, state.currentMonth);
+  const previous = getMonthTotals(prevYear, prevMonth);
+
+  setText('compRecAtual', fmt(current.receitas));
+  setText('compRecPrev', fmt(previous.receitas));
+  setText('compDespAtual', fmt(current.despesas));
+  setText('compDespPrev', fmt(previous.despesas));
+  setText('compSaldoAtual', fmt(current.saldo));
+  setText('compSaldoPrev', fmt(previous.saldo));
+
+  setDelta('compRecDelta', current.receitas, previous.receitas);
+  setDelta('compDespDelta', current.despesas, previous.despesas, true);
+  setDelta('compSaldoDelta', current.saldo, previous.saldo);
+
+  const monthLabel = (m) => ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m];
+  setText('compPeriodo', `${monthLabel(state.currentMonth)} vs ${monthLabel(prevMonth)} ${prevYear}`);
+}
+
+function renderAnual() {
+  const currentYear = state.currentYear;
+  const prevYear = currentYear - 1;
+  const currentTotals = getYearTotals(currentYear);
+  const prevTotals = getYearTotals(prevYear);
+
+  setText('annualReceitas', fmt(currentTotals.receitas));
+  setText('annualDespesas', fmt(currentTotals.despesas));
+  setText('annualSaldo', fmt(currentTotals.saldo));
+
+  setDelta('annualReceitasDelta', currentTotals.receitas, prevTotals.receitas);
+  setDelta('annualDespesasDelta', currentTotals.despesas, prevTotals.despesas, true);
+  setDelta('annualSaldoDelta', currentTotals.saldo, prevTotals.saldo);
+
+  const labels = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const monthlyRec = Array(12).fill(0);
+  const monthlyDesp = Array(12).fill(0);
+  state.transactions.forEach((t) => {
+    const d = new Date(t.data);
+    if (d.getFullYear() !== currentYear) return;
+    const m = d.getMonth();
+    if (t.tipo === 'receita') monthlyRec[m] += t.valor;
+    else monthlyDesp[m] += t.valor;
+  });
+
+  setText('annualPeriodo', `Ano ${currentYear} vs ${prevYear}`);
+
+  const ctx = document.getElementById('chartAnual');
+  if (!ctx) return;
+
+  const data = {
+    labels,
+    datasets: [
+      { label: 'Receitas', data: monthlyRec, borderColor: 'rgba(0,229,160,0.9)', backgroundColor: 'rgba(0,229,160,0.2)', tension: 0.3 },
+      { label: 'Despesas', data: monthlyDesp, borderColor: 'rgba(255,107,107,0.9)', backgroundColor: 'rgba(255,107,107,0.2)', tension: 0.3 },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { color: '#6b7fa3', font: { size: 10 } } } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#6b7fa3', font: { size: 10 } } },
+      y: { grid: { color: '#1e2d45' }, ticks: { color: '#6b7fa3', font: { size: 10 } } },
+    },
+  };
+
+  if (state.charts.anual) {
+    state.charts.anual.data = data;
+    state.charts.anual.options = options;
+    state.charts.anual.update();
+  } else {
+    state.charts.anual = new Chart(ctx, { type: 'line', data, options });
+  }
+}
+
+function getYearTotals(year) {
+  const items = state.transactions.filter((t) => {
+    const d = new Date(t.data);
+    return d.getFullYear() === year;
+  });
+  const receitas = items.filter((t) => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0);
+  const despesas = items.filter((t) => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
+  return { receitas, despesas, saldo: receitas - despesas };
+}
+
+function getMonthTotals(year, month) {
+  const items = state.transactions.filter((t) => {
+    const d = new Date(t.data);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+  const receitas = items.filter((t) => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0);
+  const despesas = items.filter((t) => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0);
+  return { receitas, despesas, saldo: receitas - despesas };
+}
+
+function getPreviousMonth(year, month) {
+  if (month === 0) return { year: year - 1, month: 11 };
+  return { year, month: month - 1 };
+}
+
+function setDelta(id, current, previous, invert = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const diff = current - previous;
+  const pct = previous > 0 ? (diff / previous) * 100 : 0;
+  const sign = diff >= 0 ? '+' : '';
+  const label = previous === 0 ? '—' : `${sign}${pct.toFixed(1)}%`;
+  el.textContent = label;
+  el.style.color = invert
+    ? (diff <= 0 ? 'var(--accent)' : 'var(--accent2)')
+    : (diff >= 0 ? 'var(--accent)' : 'var(--accent2)');
+}
+
 function renderCards() {
   const grid = document.getElementById('cardsGrid');
   if (!grid) return;
@@ -403,16 +673,17 @@ function renderCards() {
     return;
   }
 
-  const invoices = buildInvoicesForMonth();
+  const invoices = state.invoices.length ? state.invoices : buildInvoicesForMonth();
   grid.innerHTML = state.cards.map((card) => {
     const invoice = invoices.find((i) => i.cardId === card.id);
     const total = invoice ? invoice.total : 0;
-    const vencimento = invoice ? invoice.vencimento : `Dia ${card.vencimentoDia}`;
-    const fechamento = invoice ? invoice.fechamento : `Dia ${card.fechamentoDia}`;
-    const dueDate = invoice ? invoice.dueDate : buildDateFromCycle(card.vencimentoDia, state.currentMonth, state.currentYear);
-    const closeDate = invoice ? invoice.closeDate : buildDateFromCycle(card.fechamentoDia, state.currentMonth, state.currentYear);
+    const vencimento = invoice?.vencimentoDate ? fmtDate(invoice.vencimentoDate) : `Dia ${card.vencimentoDia}`;
+    const fechamento = invoice?.fechamentoDate ? fmtDate(invoice.fechamentoDate) : `Dia ${card.fechamentoDia}`;
+    const dueDate = invoice?.vencimentoDate ? new Date(invoice.vencimentoDate) : buildDateFromCycle(card.vencimentoDia, state.currentMonth, state.currentYear);
+    const closeDate = invoice?.fechamentoDate ? new Date(invoice.fechamentoDate) : buildDateFromCycle(card.fechamentoDia, state.currentMonth, state.currentYear);
     const dueInfo = getDateHighlightInfo(dueDate, 'due');
     const closeInfo = getDateHighlightInfo(closeDate, 'close');
+    const status = invoice?.status || getInvoiceStatus(closeDate);
     return `<div class="card-chip">
       <div class="card-chip-top">
         <div>
@@ -427,6 +698,9 @@ function renderCards() {
       <div class="card-chip-amount">${fmt(total)}</div>
       <div class="card-chip-due ${closeInfo.className}">Fechamento: ${fechamento} <span class="chip-label">${closeInfo.label}</span></div>
       <div class="card-chip-due ${dueInfo.className}">Vencimento: ${vencimento} <span class="chip-label">${dueInfo.label}</span></div>
+      <div class="card-chip-due">
+        Fatura: <span class="invoice-status ${status === 'aberta' ? 'invoice-open' : 'invoice-closed'}">${status}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -441,16 +715,17 @@ function buildInvoicesForMonth() {
       const invoice = resolveInvoiceCycle(new Date(t.data), card);
       const key = `${t.cardId}-${invoice.cycleYear}-${invoice.cycleMonth}`;
     if (!invoicesMap[key]) {
-      invoicesMap[key] = {
-        cardId: t.cardId,
-        total: 0,
-        cycleMonth: invoice.cycleMonth,
-        cycleYear: invoice.cycleYear,
-        vencimento: buildDueDateLabel(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
-        fechamento: buildDueDateLabel(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
-        dueDate: buildDateFromCycle(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
-        closeDate: buildDateFromCycle(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
-      };
+    invoicesMap[key] = {
+      cardId: t.cardId,
+      total: 0,
+      cycleMonth: invoice.cycleMonth,
+      cycleYear: invoice.cycleYear,
+      vencimento: buildDueDateLabel(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
+      fechamento: buildDueDateLabel(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
+      dueDate: buildDateFromCycle(card.vencimentoDia, invoice.dueMonth, invoice.dueYear),
+      closeDate: buildDateFromCycle(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear),
+      status: getInvoiceStatus(buildDateFromCycle(card.fechamentoDia, invoice.cycleMonth, invoice.cycleYear)),
+    };
     }
     invoicesMap[key].total += t.valor;
   });
@@ -486,6 +761,13 @@ function getDateHighlightInfo(targetDate, type) {
   if (diffDays === 1) return { className: 'due-soon', label: text.soon };
   if (diffDays <= 7) return { className: 'due-warning', label: text.days(diffDays) };
   return { className: '', label: '' };
+}
+
+function getInvoiceStatus(closeDate) {
+  if (!closeDate) return 'aberta';
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return closeDate >= startOfToday ? 'aberta' : 'fechada';
 }
 
 function handleCardDates() {
@@ -543,7 +825,7 @@ function openModal(tipo, item = null) {
     : `${tipo === 'receita' ? '💰' : '💳'} Nova ${tipo === 'receita' ? 'Receita' : 'Despesa'}`;
 
   const catSel = document.getElementById('inputCat');
-  const cats = tipo === 'receita' ? CATS_RECEITA : CATS_DESPESA;
+  const cats = getCategoriesByTipo(tipo);
   catSel.innerHTML = cats.map((c) => `<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('');
   document.getElementById('groupStatus').style.display = tipo === 'despesa' ? '' : 'none';
 
@@ -649,6 +931,7 @@ function openModalMeta(meta = null) {
   document.getElementById('metaNome').value = meta ? meta.nome : '';
   document.getElementById('metaAlvo').value = meta ? meta.alvo : '';
   document.getElementById('metaAtual').value = meta ? meta.atual : '';
+  document.getElementById('metaPercent').value = meta ? (meta.contribPercent || 0) : '';
   document.getElementById('modalMetaOverlay').classList.add('open');
 }
 
@@ -660,6 +943,7 @@ async function salvarMeta() {
   const nome = document.getElementById('metaNome').value.trim();
   const alvo = parseFloat(document.getElementById('metaAlvo').value);
   const atual = parseFloat(document.getElementById('metaAtual').value) || 0;
+  const contribPercent = parseFloat(document.getElementById('metaPercent').value) || 0;
   const editId = document.getElementById('metaEditId').value;
 
   if (!nome || Number.isNaN(alvo) || alvo <= 0) {
@@ -667,7 +951,7 @@ async function salvarMeta() {
     return;
   }
 
-  const payload = { nome, alvo, atual };
+  const payload = { nome, alvo, atual, contribPercent };
   setLoading(true);
   try {
     if (editId) {
@@ -703,6 +987,173 @@ function editarMeta(id) {
   const meta = state.goals.find((g) => g.id === id);
   if (!meta) return;
   openModalMeta(meta);
+}
+
+function renderCategorias() {
+  const grid = document.getElementById('categoriaGrid');
+  if (!grid) return;
+  if (state.categories.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><span class="empty-icon">🏷️</span>Nenhuma categoria personalizada.</div>`;
+    return;
+  }
+  grid.innerHTML = state.categories.map((c) => {
+    return `<div class="cat-chip">
+      <div>
+        <div class="cat-chip-name">${escHtml(c.nome)}</div>
+        <div class="cat-chip-meta">${c.tipo} • ${c.cor || 'sem cor'}</div>
+      </div>
+      <div>
+        <button class="btn-edit" onclick="editarCategoria(${c.id})" title="Editar">✎</button>
+        <button class="btn-del" onclick="deletarCategoria(${c.id})" title="Excluir">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openModalCategoria(cat = null) {
+  document.getElementById('catEditId').value = cat ? cat.id : '';
+  document.getElementById('catTitle').textContent = cat ? '🏷️ Editar Categoria' : '🏷️ Nova Categoria';
+  document.getElementById('catNome').value = cat ? cat.nome : '';
+  document.getElementById('catTipo').value = cat ? cat.tipo : 'despesa';
+  document.getElementById('catCor').value = cat ? cat.cor || '' : '';
+  document.getElementById('modalCategoriaOverlay').classList.add('open');
+}
+
+function closeModalCategoria() {
+  document.getElementById('modalCategoriaOverlay').classList.remove('open');
+}
+
+function handleCatTipo() {}
+
+async function salvarCategoria() {
+  const nome = document.getElementById('catNome').value.trim();
+  const tipo = document.getElementById('catTipo').value;
+  const cor = document.getElementById('catCor').value.trim() || null;
+  const editId = document.getElementById('catEditId').value;
+
+  if (!nome) {
+    alert('Preencha o nome da categoria.');
+    return;
+  }
+
+  const payload = { nome, tipo, cor };
+  setLoading(true);
+  try {
+    if (editId) {
+      await fetchJson(`/api/categories/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await fetchJson('/api/categories', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    await loadData();
+    closeModalCategoria();
+  } catch (error) {
+    setStatus('Erro ao salvar categoria', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deletarCategoria(id) {
+  if (!confirm('Excluir esta categoria?')) return;
+  setLoading(true);
+  try {
+    await fetchJson(`/api/categories/${id}`, { method: 'DELETE' });
+    await loadData();
+  } catch (error) {
+    setStatus('Erro ao excluir categoria', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function editarCategoria(id) {
+  const cat = state.categories.find((c) => c.id === id);
+  if (!cat) return;
+  openModalCategoria(cat);
+}
+
+function openModalBudget(budget = null) {
+  document.getElementById('budgetEditId').value = budget ? budget.id : '';
+  document.getElementById('budgetTitle').textContent = budget ? '📉 Editar Orçamento' : '📉 Novo Orçamento';
+  const options = getCategoriesByTipo('despesa')
+    .map((c) => `<option value="${c.key}">${c.emoji} ${c.label}</option>`)
+    .join('');
+  document.getElementById('budgetCategory').innerHTML = options;
+  document.getElementById('budgetCategory').value = budget ? budget.categoryKey : document.getElementById('budgetCategory').value;
+  document.getElementById('budgetLimit').value = budget ? budget.monthlyLimit : '';
+  document.getElementById('budgetThreshold').value = budget ? Math.round((budget.alertThreshold || 0.8) * 100) : 80;
+  document.getElementById('modalBudgetOverlay').classList.add('open');
+}
+
+function closeModalBudget() {
+  document.getElementById('modalBudgetOverlay').classList.remove('open');
+}
+
+async function salvarBudget() {
+  const categoryKey = document.getElementById('budgetCategory').value;
+  const monthlyLimit = parseFloat(document.getElementById('budgetLimit').value);
+  const alertThreshold = parseFloat(document.getElementById('budgetThreshold').value) / 100;
+  const editId = document.getElementById('budgetEditId').value;
+
+  if (!categoryKey || Number.isNaN(monthlyLimit) || Number.isNaN(alertThreshold)) {
+    alert('Preencha todos os campos do orçamento.');
+    return;
+  }
+
+  const payload = { categoryKey, monthlyLimit, alertThreshold };
+  setLoading(true);
+  try {
+    if (editId) {
+      await fetchJson(`/api/budgets/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await fetchJson('/api/budgets', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    await loadData();
+    closeModalBudget();
+  } catch (error) {
+    setStatus('Erro ao salvar orçamento', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deletarBudget(id) {
+  if (!confirm('Excluir este orçamento?')) return;
+  setLoading(true);
+  try {
+    await fetchJson(`/api/budgets/${id}`, { method: 'DELETE' });
+    await loadData();
+  } catch (error) {
+    setStatus('Erro ao excluir orçamento', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function editarBudget(id) {
+  const budget = state.budgets.find((b) => b.id === id);
+  if (!budget) return;
+  openModalBudget(budget);
+}
+
+async function enviarAlertasEmail() {
+  setLoading(true);
+  try {
+    await fetchJson('/api/notifications/email', {
+      method: 'POST',
+      body: JSON.stringify({ month: state.currentMonth, year: state.currentYear }),
+    });
+    setStatus('Alertas enviados', 'ok');
+  } catch (error) {
+    setStatus('Erro ao enviar alertas', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
 }
 
 function openModalCard(card = null) {
@@ -768,6 +1219,205 @@ function editarCartao(id) {
   const card = state.cards.find((c) => c.id === id);
   if (!card) return;
   openModalCard(card);
+}
+
+function openModalInvestimento(inv = null) {
+  document.getElementById('investEditId').value = inv ? inv.id : '';
+  document.getElementById('investTitle').textContent = inv ? '💹 Editar Investimento' : '💹 Novo Investimento';
+  document.getElementById('investNome').value = inv ? inv.nome : '';
+  document.getElementById('investAporte').value = inv ? inv.aporteInicial : '';
+  document.getElementById('investAtual').value = inv ? inv.valorAtual : '';
+  document.getElementById('investData').value = inv ? inv.dataInicio : new Date().toISOString().split('T')[0];
+  document.getElementById('modalInvestOverlay').classList.add('open');
+}
+
+function closeModalInvestimento() {
+  document.getElementById('modalInvestOverlay').classList.remove('open');
+}
+
+async function salvarInvestimento() {
+  const nome = document.getElementById('investNome').value.trim();
+  const aporteInicial = parseFloat(document.getElementById('investAporte').value);
+  const valorAtual = parseFloat(document.getElementById('investAtual').value);
+  const dataInicio = document.getElementById('investData').value;
+  const editId = document.getElementById('investEditId').value;
+
+  if (!nome || Number.isNaN(aporteInicial) || Number.isNaN(valorAtual) || !dataInicio) {
+    alert('Preencha todos os campos do investimento.');
+    return;
+  }
+
+  const payload = { nome, aporteInicial, valorAtual, dataInicio };
+  setLoading(true);
+  try {
+    if (editId) {
+      await fetchJson(`/api/investments/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await fetchJson('/api/investments', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    await loadData();
+    closeModalInvestimento();
+  } catch (error) {
+    setStatus('Erro ao salvar investimento', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function openModalInvestimentoUpdate(id) {
+  document.getElementById('investUpdateId').value = id;
+  document.getElementById('investUpdateValor').value = '';
+  document.getElementById('investUpdateData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modalInvestUpdateOverlay').classList.add('open');
+}
+
+function closeModalInvestimentoUpdate() {
+  document.getElementById('modalInvestUpdateOverlay').classList.remove('open');
+}
+
+async function salvarInvestimentoUpdate() {
+  const id = document.getElementById('investUpdateId').value;
+  const valor = parseFloat(document.getElementById('investUpdateValor').value);
+  const data = document.getElementById('investUpdateData').value;
+  if (!id || Number.isNaN(valor) || !data) {
+    alert('Preencha os campos da atualização.');
+    return;
+  }
+  setLoading(true);
+  try {
+    await fetchJson(`/api/investments/${id}/history`, { method: 'POST', body: JSON.stringify({ valor, data }) });
+    await loadData();
+    closeModalInvestimentoUpdate();
+  } catch (error) {
+    setStatus('Erro ao atualizar investimento', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deletarInvestimento(id) {
+  if (!confirm('Excluir este investimento?')) return;
+  setLoading(true);
+  try {
+    await fetchJson(`/api/investments/${id}`, { method: 'DELETE' });
+    await loadData();
+  } catch (error) {
+    setStatus('Erro ao excluir investimento', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function editarInvestimento(id) {
+  const inv = state.investments.find((i) => i.id === id);
+  if (!inv) return;
+  openModalInvestimento(inv);
+}
+
+function openModalRecorrencia(rec = null) {
+  document.getElementById('recEditId').value = rec ? rec.id : '';
+  document.getElementById('recTitle').textContent = rec ? '🔁 Editar Recorrência' : '🔁 Nova Recorrência';
+  document.getElementById('recDesc').value = rec ? rec.descricao : '';
+  document.getElementById('recValor').value = rec ? rec.valor : '';
+  document.getElementById('recDia').value = rec ? rec.dayOfMonth : '';
+  document.getElementById('recInicio').value = rec ? rec.startDate : new Date().toISOString().split('T')[0];
+  document.getElementById('recFim').value = rec ? rec.endDate || '' : '';
+  document.getElementById('recTipo').value = rec ? rec.tipo : 'despesa';
+  handleRecTipo();
+  document.getElementById('recCat').value = rec ? rec.categoria : document.getElementById('recCat').value;
+  document.getElementById('recMetodo').value = rec ? rec.metodoPagamento : 'debito';
+  fillRecCartSelect(rec ? rec.cardId : null);
+  toggleRecCartaoField();
+  document.getElementById('modalRecorrenciaOverlay').classList.add('open');
+}
+
+function closeModalRecorrencia() {
+  document.getElementById('modalRecorrenciaOverlay').classList.remove('open');
+}
+
+function handleRecTipo() {
+  const tipo = document.getElementById('recTipo').value;
+  const cats = getCategoriesByTipo(tipo);
+  const catSel = document.getElementById('recCat');
+  catSel.innerHTML = cats.map((c) => `<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('');
+}
+
+function fillRecCartSelect(selectedId) {
+  const select = document.getElementById('recCartao');
+  if (!select) return;
+  if (state.cards.length === 0) {
+    select.innerHTML = '<option value="">Nenhum cartão cadastrado</option>';
+    return;
+  }
+  select.innerHTML = state.cards
+    .map((c) => `<option value="${c.id}">${c.nome} • ${c.bandeira} • ${c.final}</option>`)
+    .join('');
+  if (selectedId) select.value = String(selectedId);
+}
+
+function toggleRecCartaoField() {
+  const metodo = document.getElementById('recMetodo').value;
+  const group = document.getElementById('groupRecCartao');
+  if (!group) return;
+  group.style.display = metodo === 'credito' ? '' : 'none';
+}
+
+async function salvarRecorrencia() {
+  const descricao = document.getElementById('recDesc').value.trim();
+  const valor = parseFloat(document.getElementById('recValor').value);
+  const dayOfMonth = parseInt(document.getElementById('recDia').value, 10);
+  const startDate = document.getElementById('recInicio').value;
+  const endDate = document.getElementById('recFim').value || null;
+  const tipo = document.getElementById('recTipo').value;
+  const categoria = document.getElementById('recCat').value;
+  const metodoPagamento = document.getElementById('recMetodo').value;
+  const cardId = document.getElementById('recCartao').value || null;
+  const editId = document.getElementById('recEditId').value;
+
+  if (!descricao || Number.isNaN(valor) || Number.isNaN(dayOfMonth) || !startDate) {
+    alert('Preencha todos os campos da recorrência.');
+    return;
+  }
+
+  const payload = { descricao, valor, dayOfMonth, startDate, endDate, tipo, categoria, metodoPagamento, cardId };
+  setLoading(true);
+  try {
+    if (editId) {
+      await fetchJson(`/api/recurring/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    } else {
+      await fetchJson('/api/recurring', { method: 'POST', body: JSON.stringify(payload) });
+    }
+    await loadData();
+    closeModalRecorrencia();
+  } catch (error) {
+    setStatus('Erro ao salvar recorrência', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deletarRecorrencia(id) {
+  if (!confirm('Excluir esta recorrência?')) return;
+  setLoading(true);
+  try {
+    await fetchJson(`/api/recurring/${id}`, { method: 'DELETE' });
+    await loadData();
+  } catch (error) {
+    setStatus('Erro ao excluir recorrência', 'error');
+    alert(error.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function editarRecorrencia(id) {
+  const rec = state.recurring.find((r) => r.id === id);
+  if (!rec) return;
+  openModalRecorrencia(rec);
 }
 
 function setChart(mode) {
