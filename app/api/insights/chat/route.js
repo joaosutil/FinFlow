@@ -15,9 +15,9 @@ export async function POST(req) {
   if (error) return jsonError(error, code);
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return jsonError('GEMINI_API_KEY não configurada.', 500);
+  if (!apiKey) return jsonError('IA nao configurada. Defina GEMINI_API_KEY.', 503);
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const question = String(body.question || '').trim();
   const month = Number(body.month ?? new Date().getMonth());
   const year = Number(body.year ?? new Date().getFullYear());
@@ -34,17 +34,27 @@ Resumo do mês: ${JSON.stringify(summary)}
 Pergunta: ${question}
 `.trim();
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 300 },
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 300 },
+      }),
+    });
+  } catch (e) {
+    console.error('Gemini fetch error', e);
+    return jsonError('Falha ao conectar no Gemini.', 502);
+  }
 
-  if (!response.ok) return jsonError('Falha ao gerar resposta.', 500);
-  const data = await response.json();
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    console.error('Gemini error', response.status, errText.slice(0, 400));
+    return jsonError(`Falha ao gerar resposta (Gemini ${response.status}).`, 502);
+  }
+  const data = await response.json().catch(() => null);
   const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui gerar uma resposta agora.';
 
   return jsonOk({ answer });
