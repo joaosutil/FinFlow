@@ -1,5 +1,17 @@
 import { getUserOrThrow, jsonError, jsonOk } from '../_utils';
 
+function parseGeminiErrorText(errText) {
+  const text = String(errText || '').trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    const msg = parsed?.error?.message || parsed?.message;
+    return msg ? String(msg).trim() : text.slice(0, 160);
+  } catch {
+    return text.slice(0, 160);
+  }
+}
+
 function buildSummary(transactions, goals, budgets, month, year) {
   const monthTx = transactions.filter((t) => {
     const d = new Date(t.data);
@@ -47,7 +59,7 @@ export async function POST(req) {
   const { supabase, user, error, code } = await getUserOrThrow(req);
   if (error) return jsonError(error, code);
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = String(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '').trim();
   if (!apiKey) return jsonError('IA nao configurada. Defina GEMINI_API_KEY.', 503);
 
   const body = await req.json().catch(() => ({}));
@@ -73,25 +85,35 @@ Resumo:
 ${JSON.stringify(summary, null, 2)}
 `.trim();
 
+  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash'];
   let response;
-  try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
-      }),
-    });
-  } catch (e) {
-    console.error('Gemini fetch error', e);
-    return jsonError('Falha ao conectar no Gemini.', 502);
+  let lastErrText = '';
+  for (const model of modelsToTry) {
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+        }),
+      });
+    } catch (e) {
+      console.error('Gemini fetch error', e);
+      return jsonError(`Falha ao conectar no Gemini: ${e?.message || 'erro de rede'}.`, 502);
+    }
+
+    if (response.ok) break;
+
+    lastErrText = await response.text().catch(() => '');
+    // Only retry on "model not found" style errors.
+    if (response.status !== 404) break;
   }
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    console.error('Gemini error', response.status, errText.slice(0, 400));
-    return jsonError(`Falha ao gerar insights (Gemini ${response.status}).`, 502);
+    const reason = parseGeminiErrorText(lastErrText) || 'erro desconhecido';
+    console.error('Gemini error', response.status, String(lastErrText || '').slice(0, 400));
+    return jsonError(`Falha ao gerar insights (Gemini ${response.status}): ${reason}`, 502);
   }
 
   const data = await response.json().catch(() => null);
