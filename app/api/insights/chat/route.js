@@ -12,6 +12,18 @@ function parseGeminiErrorText(errText) {
   }
 }
 
+function buildModelsToTry() {
+  const preferred = String(process.env.GEMINI_MODEL || '').trim();
+  const models = [
+    preferred,
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-latest',
+  ].filter(Boolean);
+  return Array.from(new Set(models));
+}
+
 function buildSummary(transactions, month, year) {
   const monthTx = transactions.filter((t) => {
     const d = new Date(t.data);
@@ -28,6 +40,7 @@ export async function POST(req) {
 
   const apiKey = String(process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '').trim();
   if (!apiKey) return jsonError('IA nao configurada. Defina GEMINI_API_KEY.', 503);
+  const apiBase = String(process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta').trim().replace(/\/$/, '');
 
   const body = await req.json().catch(() => ({}));
   const question = String(body.question || '').trim();
@@ -46,12 +59,12 @@ Resumo do mês: ${JSON.stringify(summary)}
 Pergunta: ${question}
 `.trim();
 
-  const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash'];
+  const modelsToTry = buildModelsToTry();
   let response;
   let lastErrText = '';
   for (const model of modelsToTry) {
     try {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      response = await fetch(`${apiBase}/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,7 +86,9 @@ Pergunta: ${question}
   if (!response.ok) {
     const reason = parseGeminiErrorText(lastErrText) || 'erro desconhecido';
     console.error('Gemini error', response.status, String(lastErrText || '').slice(0, 400));
-    return jsonError(`Falha ao gerar resposta (Gemini ${response.status}): ${reason}`, 502);
+    const status = Number(response.status) || 502;
+    const code = status === 429 ? 429 : 502;
+    return jsonError(`Falha ao gerar resposta (Gemini ${status}): ${reason}`, code);
   }
   const data = await response.json().catch(() => null);
   const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui gerar uma resposta agora.';
