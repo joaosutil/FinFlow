@@ -16,6 +16,7 @@ function buildModelsToTry() {
   const preferred = String(process.env.GEMINI_MODEL || '').trim();
   const models = [
     preferred,
+    'gemini-3-flash-preview',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
     'gemini-1.5-flash',
