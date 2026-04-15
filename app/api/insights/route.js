@@ -120,9 +120,11 @@ export async function POST(req) {
   const summary = buildSummary(transactions || [], goals || [], budgets || [], month, year);
 
   const prompt = `
-Você é um analista financeiro pessoal. Com base no resumo abaixo, gere 5 a 8 insights curtos, práticos e objetivos em português.
-- Foque em economia, cortes, saúde financeira e próximos passos.
-- Não invente dados.
+Voce e um analista financeiro pessoal.
+Gere 6 a 8 insights curtos (1 a 2 frases cada) em portugues (pt-BR), nunca em ingles.
+- Use numeros quando der (R$, %, categorias, orcamentos).
+- Se houver poucos dados, traga sugestoes gerais e proximos passos (nao repita so \"voce economizou X\").
+- Nao invente dados; quando algo for estimativa, diga que e estimativa.
 - Responda SOMENTE com JSON puro, sem markdown e sem blocos de codigo.
 - Formato: { "insights": ["...","..."] }
 
@@ -140,7 +142,7 @@ ${JSON.stringify(summary, null, 2)}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+          generationConfig: { temperature: 0.45, maxOutputTokens: 900 },
         }),
       });
     } catch (e) {

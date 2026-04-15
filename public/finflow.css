@@ -757,6 +757,8 @@ td {
   padding: 14px;
   font-size: 13px;
   line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .insight-settings {
@@ -786,6 +788,8 @@ td {
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .chat-user {

@@ -59,10 +59,14 @@ export async function POST(req) {
   const summary = buildSummary(transactions || [], month, year);
 
   const prompt = `
-Você é um assistente financeiro. Responda em português de forma objetiva.
-Evite prometer ganhos e deixe claro que não é aconselhamento financeiro.
+Voce e um assistente financeiro (pt-BR). Nunca responda em ingles.
+Responda de forma completa, didatica e pratica, sem prometer ganhos e deixando claro que nao e aconselhamento financeiro.
+Formato sugerido:
+- 3 a 6 pontos de acao (bullets)
+- 1 alerta de risco (se fizer sentido)
+- 1 pergunta final para entender melhor
 
-Resumo do mês: ${JSON.stringify(summary)}
+Resumo do mes: ${JSON.stringify(summary)}
 Pergunta: ${question}
 `.trim();
 
@@ -76,7 +80,7 @@ Pergunta: ${question}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 300 },
+          generationConfig: { temperature: 0.45, maxOutputTokens: 900 },
         }),
       });
     } catch (e) {
