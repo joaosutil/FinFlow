@@ -25,6 +25,36 @@ function buildModelsToTry() {
   return Array.from(new Set(models));
 }
 
+function extractJsonFromModelText(rawText) {
+  const original = String(rawText || '').trim();
+  if (!original) return null;
+
+  // Prefer fenced JSON blocks: ```json ... ```
+  const fenced = original.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const text = (fenced ? fenced[1] : original).trim();
+
+  // Then try to isolate a JSON object inside the text.
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start >= 0 && end > start) return text.slice(start, end + 1);
+
+  return null;
+}
+
+function normalizeInsightsFallback(rawText) {
+  const text = String(rawText || '');
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter((l) => l !== '```' && l !== '```json' && l !== 'json')
+    .filter((l) => l !== '{' && l !== '}' && l !== '[' && l !== ']' && l !== '},' && l !== '],')
+    .map((l) => l.replace(/^[-*]\s+/, ''))
+    .map((l) => l.replace(/^\d+\.?\s+/, ''))
+    .map((l) => l.replace(/^\"|\",?$|\"$/g, ''))
+    .slice(0, 8);
+}
+
 function buildSummary(transactions, goals, budgets, month, year) {
   const monthTx = transactions.filter((t) => {
     const d = new Date(t.data);
@@ -93,7 +123,8 @@ export async function POST(req) {
 Você é um analista financeiro pessoal. Com base no resumo abaixo, gere 5 a 8 insights curtos, práticos e objetivos em português.
 - Foque em economia, cortes, saúde financeira e próximos passos.
 - Não invente dados.
-- Responda em JSON como: { "insights": ["...","..."] }
+- Responda SOMENTE com JSON puro, sem markdown e sem blocos de codigo.
+- Formato: { "insights": ["...","..."] }
 
 Resumo:
 ${JSON.stringify(summary, null, 2)}
@@ -136,10 +167,11 @@ ${JSON.stringify(summary, null, 2)}
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   let insights = [];
   try {
-    const parsed = JSON.parse(text);
-    insights = parsed.insights || [];
+    const jsonText = extractJsonFromModelText(text) || text;
+    const parsed = JSON.parse(jsonText);
+    insights = Array.isArray(parsed?.insights) ? parsed.insights : [];
   } catch {
-    insights = text.split('\n').filter(Boolean).slice(0, 8);
+    insights = normalizeInsightsFallback(text);
   }
 
   const { error: histErr } = await supabase.from('insights_history').insert({ user_id: user.id, month, year, insights });

@@ -25,6 +25,12 @@ function buildModelsToTry() {
   return Array.from(new Set(models));
 }
 
+function stripCodeFences(text) {
+  const original = String(text || '').trim();
+  const fenced = original.match(/```(?:\w+)?\s*([\s\S]*?)```/i);
+  return (fenced ? fenced[1] : original).trim();
+}
+
 function buildSummary(transactions, month, year) {
   const monthTx = transactions.filter((t) => {
     const d = new Date(t.data);
@@ -92,7 +98,8 @@ Pergunta: ${question}
     return jsonError(`Falha ao gerar resposta (Gemini ${status}): ${reason}`, code);
   }
   const data = await response.json().catch(() => null);
-  const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui gerar uma resposta agora.';
+  const rawAnswer = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Nao consegui gerar uma resposta agora.';
+  const answer = stripCodeFences(rawAnswer);
 
   return jsonOk({ answer });
 }
